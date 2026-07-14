@@ -1,0 +1,546 @@
+output:
+  - platform: gpio
+    pin: GPIO21
+    id: display_pwr
+
+esphome:
+  name: eink-dashboard
+  on_boot:
+    priority: 600
+    then:
+      - output.turn_on: display_pwr
+      - delay: 500ms
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_XTAL_FREQ_40: 'y'
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_key
+  on_client_connected:
+    # after (re)connecting to HA, render with fresh data and force a full
+    # refresh so any splash/stale ghosting is cleared
+    - delay: 2s
+    - script.execute: full_refresh
+
+script:
+  - id: full_refresh
+    mode: single
+    then:
+      - lambda: 'id(epaper).set_full_update_every(1);'
+      - component.update: epaper
+      - lambda: 'id(epaper).set_full_update_every(30);'
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time:
+      # redraw once a minute, on the minute (partial refresh; full every 30th)
+      - seconds: 0
+        then:
+          - component.update: epaper
+
+interval:
+  # fallback refresh while HA time is not yet synced (shows the
+  # "Connecting…" splash instead of leaving stale content on screen);
+  # once time is valid, the on_time minute tick drives all updates
+  - interval: 60s
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(ha_time).now().is_valid();'
+          then:
+            - component.update: epaper
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+# ------------------------------------------------------------- HA entities
+sensor:
+  - platform: homeassistant
+    id: wx_temp
+    entity_id: sensor.openweathermap_temperature
+  - platform: homeassistant
+    id: wx_feels
+    entity_id: sensor.openweathermap_apparent_temperature
+  - platform: homeassistant
+    id: wx_wind
+    entity_id: sensor.openweathermap_wind_speed
+  - platform: homeassistant
+    id: wx_high
+    entity_id: input_number.eink_weather_high
+  - platform: homeassistant
+    id: wx_low
+    entity_id: input_number.eink_weather_low
+  - platform: homeassistant
+    id: wx_rain
+    entity_id: input_number.eink_weather_rain
+  - platform: homeassistant
+    id: ev_batt
+    entity_id: sensor.my_ev6_ev_battery_level
+  - platform: homeassistant
+    id: indoor_temp
+    entity_id: sensor.hub_2_d893_temperature
+  - platform: homeassistant
+    id: batt_low_count
+    entity_id: input_number.eink_battery_low_count
+  - platform: homeassistant
+    id: ev_batt_thresh
+    entity_id: input_number.eink_thresh_ev_batt
+
+text_sensor:
+  - platform: homeassistant
+    id: wx_cond
+    entity_id: sensor.openweathermap_condition
+  - platform: homeassistant
+    id: alarm_state
+    entity_id: alarm_control_panel.alarm_control_panel
+  - platform: homeassistant
+    id: lock_front
+    entity_id: lock.entryway_door
+  - platform: homeassistant
+    id: lock_kitchen
+    entity_id: lock.kitchen
+  - platform: homeassistant
+    id: lock_dining
+    entity_id: lock.dining_room
+  - platform: homeassistant
+    id: lock_garage
+    entity_id: lock.garage
+  - platform: homeassistant
+    id: garage_west
+    entity_id: cover.garage_door_west_door
+  - platform: homeassistant
+    id: garage_east
+    entity_id: cover.ratgdov25i_db1a76_door
+  - platform: homeassistant
+    id: batt_worst
+    entity_id: input_text.eink_battery_worst
+  - platform: homeassistant
+    id: status_priority
+    entity_id: input_text.eink_status_priority
+  - platform: homeassistant
+    id: ev_1
+    entity_id: input_text.eink_event_1
+  - platform: homeassistant
+    id: ev_2
+    entity_id: input_text.eink_event_2
+  - platform: homeassistant
+    id: ev_3
+    entity_id: input_text.eink_event_3
+  - platform: homeassistant
+    id: ev_4
+    entity_id: input_text.eink_event_4
+  - platform: homeassistant
+    id: ev_5
+    entity_id: input_text.eink_event_5
+  - platform: homeassistant
+    id: ev_6
+    entity_id: input_text.eink_event_6
+  - platform: homeassistant
+    id: ev_7
+    entity_id: input_text.eink_event_7
+
+# ------------------------------------------------------------------- fonts
+font:
+  - file: "gfonts://Roboto@700"
+    id: font_clock
+    size: 108
+    glyphs: "0123456789: "
+  - file: "gfonts://Roboto@700"
+    id: font_ampm
+    size: 28
+    glyphs: "APM "
+  - file: "gfonts://Roboto"
+    id: font_date
+    size: 24
+    glyphs: &full_glyphs " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{|}~°·…’"
+  - file: "gfonts://Roboto@700"
+    id: font_temp
+    size: 58
+    glyphs: "0123456789°- "
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 19
+    glyphs: *full_glyphs
+  - file: "gfonts://Roboto@700"
+    id: font_hl
+    size: 24
+    glyphs: "0123456789°HL -"
+  - file: "gfonts://Roboto@700"
+    id: font_hdr
+    size: 17
+    glyphs: *full_glyphs
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 22
+    glyphs: *full_glyphs
+  - file: "gfonts://Roboto"
+    id: font_evtime
+    size: 17
+    glyphs: *full_glyphs
+  - file: "gfonts://Roboto@700"
+    id: font_badge
+    size: 15
+    glyphs: "DAFB"
+  - file: "gfonts://Roboto"
+    id: font_status
+    size: 18
+    glyphs: *full_glyphs
+  - file: "gfonts://Roboto@700"
+    id: font_status_b
+    size: 18
+    glyphs: *full_glyphs
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: mdi_lg
+    size: 78
+    glyphs: [
+      "\U000F0599", # weather-sunny
+      "\U000F0594", # weather-night
+      "\U000F0F31", # weather-night-partly-cloudy
+      "\U000F0595", # weather-partly-cloudy
+      "\U000F0590", # weather-cloudy
+      "\U000F0597", # weather-rainy
+      "\U000F0596", # weather-pouring
+      "\U000F0593", # weather-lightning
+      "\U000F067E", # weather-lightning-rainy
+      "\U000F0598", # weather-snowy
+      "\U000F067F", # weather-snowy-rainy
+      "\U000F0591", # weather-fog
+      "\U000F0592", # weather-hail
+      "\U000F059D", # weather-windy
+      "\U000F05D6", # alert-circle-outline
+      ]
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: mdi_md
+    size: 26
+    glyphs: [
+      "\U000F0A7A", # trash-can-outline
+      "\U000F044C", # recycle
+      "\U000F0565", # shield-check
+      "\U000F099E", # shield-off
+      "\U000F0ECC", # shield-alert
+      "\U000F068A", # shield-home
+      "\U000F033E", # lock
+      "\U000F0FC6", # lock-open-variant
+      "\U000F06D9", # garage
+      "\U000F06DA", # garage-open
+      "\U000F0B6C", # car-electric
+      "\U000F050F", # thermometer
+      "\U000F0083", # battery-alert
+      ]
+
+# ----------------------------------------------------------------- display
+display:
+  - platform: waveshare_epaper
+    id: epaper
+    cs_pin: GPIO19
+    dc_pin: GPIO17
+    busy_pin:
+      number: GPIO4
+      inverted: true
+    reset_pin: GPIO16
+    model: 7.50inv2p
+    update_interval: never
+    full_update_every: 30
+    lambda: |-
+      // ------------------------------------------------ constants & helpers
+      const int W = 800, H = 480, LEFT_W = 296, STATUS_H = 56, MARGIN = 20;
+      const int COL_C = LEFT_W / 2;
+      static const char *WDAY3[] = {"SUN","MON","TUE","WED","THU","FRI","SAT"};
+      static const char *WDAY_FULL[] = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
+      static const char *MON3[] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+      static const char *MON_FULL[] = {"January","February","March","April","May","June","July","August","September","October","November","December"};
+
+      auto text_w = [&](const char *s, esphome::display::BaseFont *f) -> int {
+        int x1, y1, w, h;
+        it.get_text_bounds(0, 0, s, f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+        return w;
+      };
+      auto hline = [&](int x, int y, int w2, int t) { it.filled_rectangle(x, y, w2, t); };
+      auto pill = [&](int x0, int y0, int x1, int y1) {
+        int r = (y1 - y0) / 2, cy = (y0 + y1) / 2;
+        it.filled_circle(x0 + r, cy, r);
+        it.filled_circle(x1 - r, cy, r);
+        it.filled_rectangle(x0 + r, y0, x1 - x0 - 2 * r, y1 - y0);
+      };
+      // days since 1970-01-01 for a civil date (Hinnant's algorithm)
+      auto days_from_civil = [](int y, int m, int d) -> long {
+        y -= m <= 2;
+        long era = (y >= 0 ? y : y - 399) / 400;
+        unsigned yoe = (unsigned)(y - era * 400);
+        unsigned doy = (153u * (unsigned)(m + (m > 2 ? -3 : 9)) + 2u) / 5u + (unsigned)d - 1u;
+        unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+        return era * 146097L + (long)doe - 719468L;
+      };
+
+      auto now = id(ha_time).now();
+      if (!now.is_valid()) {
+        it.print(W / 2, H / 2, id(font_date), TextAlign::CENTER, "Connecting…");
+        return;
+      }
+
+      // --------------------------------------------------------- structure
+      it.filled_rectangle(LEFT_W, 16, 2, H - STATUS_H - 28);   // vertical rule
+      it.filled_rectangle(0, H - STATUS_H, W, 2);              // status rule
+
+      // ------------------------------------------------------------- clock
+      int hr = now.hour % 12; if (hr == 0) hr = 12;
+      char clock_s[8], date_s[40];
+      snprintf(clock_s, sizeof(clock_s), "%d:%02d", hr, now.minute);
+      const char *ampm = now.hour < 12 ? "AM" : "PM";
+      int tw = text_w(clock_s, id(font_clock));
+      int aw = text_w(ampm, id(font_ampm)) + 6;
+      int cx0 = COL_C - (tw + aw) / 2;
+      it.print(cx0, 18, id(font_clock), clock_s);
+      it.print(cx0 + tw + 6, 96, id(font_ampm), ampm);
+      snprintf(date_s, sizeof(date_s), "%s, %s %d",
+               WDAY_FULL[(now.day_of_week - 1) % 7], MON_FULL[now.month - 1],
+               now.day_of_month);
+      it.print(COL_C, 148, id(font_date), TextAlign::TOP_CENTER, date_s);
+
+      hline(MARGIN, 192, LEFT_W - 2 * MARGIN, 2);
+
+      // ----------------------------------------------------------- weather
+      std::string cond = id(wx_cond).has_state() ? id(wx_cond).state : "";
+      const char *wx_icon = "\U000F05D6"; const char *wx_label = "--";
+      if (cond == "sunny") { wx_icon = "\U000F0599"; wx_label = "Sunny"; }
+      else if (cond == "clear-night") { wx_icon = "\U000F0594"; wx_label = "Clear"; }
+      else if (cond == "partlycloudy") { wx_icon = now.hour >= 6 && now.hour < 20 ? "\U000F0595" : "\U000F0F31"; wx_label = "Partly cloudy"; }
+      else if (cond == "cloudy") { wx_icon = "\U000F0590"; wx_label = "Cloudy"; }
+      else if (cond == "rainy") { wx_icon = "\U000F0597"; wx_label = "Rain"; }
+      else if (cond == "pouring") { wx_icon = "\U000F0596"; wx_label = "Heavy rain"; }
+      else if (cond == "lightning") { wx_icon = "\U000F0593"; wx_label = "Storms"; }
+      else if (cond == "lightning-rainy") { wx_icon = "\U000F067E"; wx_label = "Storms"; }
+      else if (cond == "snowy") { wx_icon = "\U000F0598"; wx_label = "Snow"; }
+      else if (cond == "snowy-rainy") { wx_icon = "\U000F067F"; wx_label = "Wintry mix"; }
+      else if (cond == "fog") { wx_icon = "\U000F0591"; wx_label = "Fog"; }
+      else if (cond == "hail") { wx_icon = "\U000F0592"; wx_label = "Hail"; }
+      else if (cond == "windy" || cond == "windy-variant") { wx_icon = "\U000F059D"; wx_label = "Windy"; }
+
+      it.print(24, 204, id(mdi_lg), wx_icon);
+      if (id(wx_temp).has_state())
+        it.printf(124, 200, id(font_temp), "%.0f°", id(wx_temp).state);
+      if (id(wx_feels).has_state())
+        it.printf(126, 264, id(font_small), "%s · feels %.0f°", wx_label, id(wx_feels).state);
+      else
+        it.print(126, 264, id(font_small), wx_label);
+      if (id(wx_high).has_state() && id(wx_low).has_state())
+        it.printf(COL_C, 304, id(font_hl), TextAlign::TOP_CENTER, "H %.0f°   L %.0f°",
+                  id(wx_high).state, id(wx_low).state);
+      {
+        char line2[48] = "";
+        if (id(wx_rain).has_state() && id(wx_wind).has_state())
+          snprintf(line2, sizeof(line2), "Rain %.0f%%  ·  Wind %.0f mph", id(wx_rain).state, id(wx_wind).state);
+        else if (id(wx_wind).has_state())
+          snprintf(line2, sizeof(line2), "Wind %.0f mph", id(wx_wind).state);
+        if (line2[0]) it.print(COL_C, 336, id(font_small), TextAlign::TOP_CENTER, line2);
+      }
+
+      // --------------------------------------------------- trash/recycling
+      {
+        int wd = now.day_of_week;  // 1 = Sunday ... 7 = Saturday
+        bool show = (wd == 2 && now.hour >= 12) || (wd == 3 && now.hour < 12);
+        if (show) {
+          long pickup = days_from_civil(now.year, now.month, now.day_of_month) + (wd == 2 ? 1 : 0);
+          long anchor = days_from_civil(2026, 7, 14);  // known recycling pickup
+          bool recycling = (((pickup - anchor) / 7) % 2) == 0;
+          pill(MARGIN, 370, LEFT_W - MARGIN, 412);
+          const char *label = recycling ? "TRASH + RECYCLING" : "TRASH NIGHT";
+          int lw = text_w(label, id(font_hdr));
+          int total = (recycling ? 2 : 1) * 34 + lw;
+          int x = COL_C - total / 2;
+          it.print(x, 378, id(mdi_md), COLOR_OFF, "\U000F0A7A");
+          x += 34;
+          if (recycling) { it.print(x, 378, id(mdi_md), COLOR_OFF, "\U000F044C"); x += 34; }
+          it.print(x, 391, id(font_hdr), COLOR_OFF, TextAlign::CENTER_LEFT, label);
+        }
+      }
+
+      // ------------------------------------------------------------ agenda
+      {
+        char today_s[12], tomorrow_s[12];
+        snprintf(today_s, sizeof(today_s), "%04d-%02d-%02d", now.year, now.month, now.day_of_month);
+        ESPTime tmw = ESPTime::from_epoch_local(now.timestamp + 86400);
+        snprintf(tomorrow_s, sizeof(tomorrow_s), "%04d-%02d-%02d", tmw.year, tmw.month, tmw.day_of_month);
+
+        text_sensor::TextSensor *slots[7] = {id(ev_1), id(ev_2), id(ev_3), id(ev_4), id(ev_5), id(ev_6), id(ev_7)};
+        int x0 = LEFT_W + 26, x1 = W - MARGIN, y = 16;
+        std::string cur_date = "";
+        int shown = 0;
+        for (auto *slot : slots) {
+          if (!slot->has_state()) continue;
+          std::string row = slot->state;
+          size_t p1 = row.find('|');
+          if (p1 == std::string::npos) continue;
+          size_t p2 = row.find('|', p1 + 1);
+          size_t p3 = row.find('|', p2 + 1);
+          if (p2 == std::string::npos || p3 == std::string::npos) continue;
+          std::string date = row.substr(0, p1);
+          std::string tstr = row.substr(p1 + 1, p2 - p1 - 1);
+          std::string who = row.substr(p2 + 1, p3 - p2 - 1);
+          std::string title = row.substr(p3 + 1);
+          if (date < today_s) date = today_s;  // ongoing multi-day events
+
+          if (date != cur_date) {
+            if (y > H - STATUS_H - 74) break;
+            if (cur_date != "") y += 10;
+            cur_date = date;
+            char hdr[20];
+            if (date == today_s) snprintf(hdr, sizeof(hdr), "TODAY");
+            else if (date == tomorrow_s) snprintf(hdr, sizeof(hdr), "TOMORROW");
+            else {
+              int yy = atoi(date.substr(0, 4).c_str());
+              int mm = atoi(date.substr(5, 2).c_str());
+              int dd = atoi(date.substr(8, 2).c_str());
+              int dow = (int)((days_from_civil(yy, mm, dd) + 4) % 7);  // 0 = Sunday
+              snprintf(hdr, sizeof(hdr), "%s %s %d", WDAY3[dow], MON3[mm - 1], dd);
+            }
+            it.print(x0, y, id(font_hdr), hdr);
+            int hw = text_w(hdr, id(font_hdr));
+            hline(x0 + hw + 12, y + 9, x1 - (x0 + hw + 12), 1);
+            y += 30;
+          }
+          if (y > H - STATUS_H - 44) break;
+
+          int cy = y + 15;
+          it.filled_circle(x0 + 13, cy, 13);
+          it.print(x0 + 13, cy, id(font_badge), COLOR_OFF, TextAlign::CENTER, who.c_str());
+          int tw2 = text_w(tstr.c_str(), id(font_evtime));
+          it.print(x1, cy - 9, id(font_evtime), TextAlign::TOP_RIGHT, tstr.c_str());
+          int max_w = (x1 - tw2 - 16) - (x0 + 26 + 12);
+          std::string t = title;
+          if (text_w(t.c_str(), id(font_title)) > max_w) {
+            while (t.size() > 1 && text_w((t + "…").c_str(), id(font_title)) > max_w) t.pop_back();
+            t += "…";
+          }
+          it.print(x0 + 26 + 12, cy - 12, id(font_title), t.c_str());
+          y += 42;
+          shown++;
+        }
+        if (shown == 0)
+          it.print(x0 + (x1 - x0) / 2, 120, id(font_small), TextAlign::TOP_CENTER, "No upcoming events");
+      }
+
+      // -------------------------------------------------------- status bar
+      {
+        struct Item { const char *icon; std::string text; bool alert; bool droppable; };
+        std::vector<Item> items;
+        std::string prio = id(status_priority).has_state() ? id(status_priority).state : "alarm, locks, garage, ev, temp";
+        prio += ",";
+        size_t pos = 0;
+        while (pos < prio.size()) {
+          size_t nx = prio.find(',', pos);
+          if (nx == std::string::npos) break;
+          std::string tok = prio.substr(pos, nx - pos);
+          pos = nx + 1;
+          size_t a = tok.find_first_not_of(' ');
+          if (a == std::string::npos) continue;
+          size_t b = tok.find_last_not_of(' ');
+          tok = tok.substr(a, b - a + 1);
+
+          if (tok == "alarm" && id(alarm_state).has_state()) {
+            std::string st = id(alarm_state).state;
+            if (st == "disarmed") items.push_back({"\U000F099E", "Disarmed", false, true});
+            else if (st == "triggered") items.push_back({"\U000F0ECC", "ALARM", true, false});
+            else if (st == "arming" || st == "pending") items.push_back({"\U000F068A", "Arming", false, true});
+            else if (st.rfind("armed", 0) == 0) {
+              std::string mode = st.size() > 6 ? st.substr(6) : "";
+              if (!mode.empty()) mode[0] = toupper(mode[0]);
+              items.push_back({"\U000F0565", "Armed " + mode, false, true});
+            }
+          } else if (tok == "locks") {
+            int unlocked = 0, known = 0;
+            text_sensor::TextSensor *locks[4] = {id(lock_front), id(lock_kitchen), id(lock_dining), id(lock_garage)};
+            for (auto *l : locks) {
+              if (!l->has_state()) continue;
+              std::string st = l->state;
+              if (st == "unlocked" || st == "unlocking" || st == "open") unlocked++;
+              if (st == "locked" || st == "unlocked" || st == "unlocking" || st == "locking" || st == "open") known++;
+            }
+            if (known > 0) {
+              if (unlocked > 0) items.push_back({"\U000F0FC6", std::to_string(unlocked) + " unlocked", true, false});
+              else items.push_back({"\U000F033E", "Locked", false, true});
+            }
+          } else if (tok == "garage") {
+            bool open = false, known = false;
+            text_sensor::TextSensor *doors[2] = {id(garage_west), id(garage_east)};
+            for (auto *d : doors) {
+              if (!d->has_state()) continue;
+              std::string st = d->state;
+              if (st == "open" || st == "opening" || st == "closing") open = true;
+              if (st == "open" || st == "closed" || st == "opening" || st == "closing") known = true;
+            }
+            if (known) {
+              if (open) items.push_back({"\U000F06DA", "Garage open", true, false});
+              else items.push_back({"\U000F06D9", "Closed", false, true});
+            }
+          } else if (tok == "ev" && id(ev_batt).has_state()) {
+            char b[16];
+            snprintf(b, sizeof(b), "EV %.0f%%", id(ev_batt).state);
+            float th = id(ev_batt_thresh).has_state() ? id(ev_batt_thresh).state : 20.0f;
+            bool low = id(ev_batt).state <= th;
+            items.push_back({"\U000F0B6C", b, low, !low});
+          } else if (tok == "temp" && id(indoor_temp).has_state()) {
+            char b[16];
+            snprintf(b, sizeof(b), "%.0f° in", id(indoor_temp).state);
+            items.push_back({"\U000F050F", b, false, true});
+          }
+        }
+        // battery alert pill (always shown when present)
+        if (id(batt_worst).has_state() && !id(batt_worst).state.empty()) {
+          std::string txt = id(batt_worst).state;
+          int cnt = id(batt_low_count).has_state() ? (int)id(batt_low_count).state : 1;
+          if (cnt > 1) txt += "  +" + std::to_string(cnt - 1);
+          items.push_back({"\U000F0083", txt, true, false});
+        }
+
+        const int iw = 26, pad = 10, min_gap = 24, avail = W - 2 * MARGIN;
+        auto item_w = [&](const Item &i) -> int {
+          return iw + 8 + text_w(i.text.c_str(), i.alert ? (esphome::display::BaseFont *) id(font_status_b) : (esphome::display::BaseFont *) id(font_status)) + (i.alert ? 2 * pad : 0);
+        };
+        auto total_w = [&]() -> int {
+          int s = 0;
+          for (auto &i : items) s += item_w(i);
+          return s + min_gap * ((int)items.size() - 1);
+        };
+        while (items.size() > 1 && total_w() > avail) {
+          bool dropped = false;
+          for (int i = (int)items.size() - 1; i >= 0; i--) {
+            if (items[i].droppable) { items.erase(items.begin() + i); dropped = true; break; }
+          }
+          if (!dropped) break;
+        }
+
+        int sum = 0;
+        for (auto &i : items) sum += item_w(i);
+        int gap = items.size() > 1 ? (avail - sum) / ((int)items.size() - 1) : 0;
+        int x = MARGIN, y0 = H - STATUS_H, cy = y0 + STATUS_H / 2 + 1;
+        for (auto &i : items) {
+          int wd2 = item_w(i);
+          if (i.alert) {
+            pill(x, y0 + 10, x + wd2, H - 10);
+            it.print(x + pad, cy - 13, id(mdi_md), COLOR_OFF, i.icon);
+            it.print(x + pad + iw + 8, cy, id(font_status_b), COLOR_OFF, TextAlign::CENTER_LEFT, i.text.c_str());
+          } else {
+            it.print(x, cy - 13, id(mdi_md), i.icon);
+            it.print(x + iw + 8, cy, id(font_status), TextAlign::CENTER_LEFT, i.text.c_str());
+          }
+          x += wd2 + gap;
+        }
+      }
