@@ -59,15 +59,17 @@ time:
 
 interval:
   # fallback refresh while HA time is not yet synced (shows the
-  # "Connecting…" splash instead of leaving stale content on screen);
-  # once time is valid, the on_time minute tick drives all updates
+  # "Connecting…" splash instead of leaving stale content on screen).
+  # Uses a FULL refresh: after a reboot the panel's own RAM may hold a
+  # stale frame, and partial updates diff against it — a full refresh
+  # resyncs the panel before any partial ever runs.
   - interval: 60s
     then:
       - if:
           condition:
             lambda: 'return !id(ha_time).now().is_valid();'
           then:
-            - component.update: epaper
+            - script.execute: full_refresh
 
 spi:
   clk_pin: GPIO18
