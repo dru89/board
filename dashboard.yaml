@@ -26,9 +26,12 @@ api:
   encryption:
     key: !secret api_key
   on_client_connected:
-    # after (re)connecting to HA, render with fresh data and force a full
-    # refresh so any splash/stale ghosting is cleared
+    # quick partial render for fast feedback, then a full clean-up refresh
+    # once sensor states have settled — clears splash/stale ghosting without
+    # ever full-refreshing a half-populated frame
     - delay: 2s
+    - component.update: epaper
+    - delay: 20s
     - script.execute: full_refresh
 
 script:
@@ -155,6 +158,9 @@ text_sensor:
   - platform: homeassistant
     id: ev_7
     entity_id: input_text.eink_event_7
+  - platform: homeassistant
+    id: day_status
+    entity_id: input_text.eink_day_status
 
 # ------------------------------------------------------------------- fonts
 font:
@@ -225,6 +231,17 @@ font:
       "\U000F0592", # weather-hail
       "\U000F059D", # weather-windy
       "\U000F05D6", # alert-circle-outline
+      ]
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: mdi_sm
+    size: 20
+    glyphs: [
+      "\U000F00D6", # briefcase (office)
+      "\U000F0322", # laptop (wfh)
+      "\U000F001D", # airplane (work travel)
+      "\U000F1055", # palm-tree (vacation)
+      "\U000F06EF", # medical-bag (sick)
+      "\U000F011E", # cellphone-basic (on call)
       ]
   - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
     id: mdi_md
@@ -318,7 +335,10 @@ display:
 
       // ----------------------------------------------------------- weather
       std::string cond = id(wx_cond).has_state() ? id(wx_cond).state : "";
-      const char *wx_icon = "\U000F05D6"; const char *wx_label = "--";
+      // no state yet (e.g. right after boot): draw nothing rather than the
+      // alert icon — a blank can't leave ghosting behind
+      const char *wx_icon = cond.empty() ? nullptr : "\U000F05D6";
+      const char *wx_label = "--";
       if (cond == "sunny") { wx_icon = "\U000F0599"; wx_label = "Sunny"; }
       else if (cond == "clear-night") { wx_icon = "\U000F0594"; wx_label = "Clear"; }
       else if (cond == "partlycloudy") { wx_icon = now.hour >= 6 && now.hour < 20 ? "\U000F0595" : "\U000F0F31"; wx_label = "Partly cloudy"; }
@@ -333,7 +353,7 @@ display:
       else if (cond == "hail") { wx_icon = "\U000F0592"; wx_label = "Hail"; }
       else if (cond == "windy" || cond == "windy-variant") { wx_icon = "\U000F059D"; wx_label = "Windy"; }
 
-      it.print(24, 204, id(mdi_lg), wx_icon);
+      if (wx_icon != nullptr) it.print(24, 204, id(mdi_lg), wx_icon);
       if (id(wx_temp).has_state())
         it.printf(124, 200, id(font_temp), "%.0f°", id(wx_temp).state);
       if (id(wx_feels).has_state())
@@ -374,15 +394,51 @@ display:
 
       // ------------------------------------------------------------ agenda
       {
-        char today_s[12], tomorrow_s[12];
+        char today_s[12], day1_s[12], day2_s[12];
         snprintf(today_s, sizeof(today_s), "%04d-%02d-%02d", now.year, now.month, now.day_of_month);
-        ESPTime tmw = ESPTime::from_epoch_local(now.timestamp + 86400);
-        snprintf(tomorrow_s, sizeof(tomorrow_s), "%04d-%02d-%02d", tmw.year, tmw.month, tmw.day_of_month);
+        ESPTime d1 = ESPTime::from_epoch_local(now.timestamp + 86400);
+        ESPTime d2 = ESPTime::from_epoch_local(now.timestamp + 2 * 86400);
+        snprintf(day1_s, sizeof(day1_s), "%04d-%02d-%02d", d1.year, d1.month, d1.day_of_month);
+        snprintf(day2_s, sizeof(day2_s), "%04d-%02d-%02d", d2.year, d2.month, d2.day_of_month);
 
+        // per-day work status + on-call from "YYYY-MM-DD|S|P;..." rows
+        std::vector<std::string> ds_date;
+        std::vector<char> ds_st, ds_oc;
+        if (id(day_status).has_state()) {
+          std::string ds = id(day_status).state;
+          size_t p = 0;
+          while (p < ds.size()) {
+            size_t q = ds.find(';', p);
+            if (q == std::string::npos) q = ds.size();
+            std::string r = ds.substr(p, q - p);
+            if (r.size() >= 14 && r[10] == '|' && r[12] == '|') {
+              ds_date.push_back(r.substr(0, 10));
+              ds_st.push_back(r[11]);
+              ds_oc.push_back(r[13]);
+            }
+            p = q + 1;
+          }
+        }
+        auto day_flags = [&](const std::string &date, char &st, char &oc) {
+          st = '-'; oc = '-';
+          for (size_t i = 0; i < ds_date.size(); i++)
+            if (ds_date[i] == date) { st = ds_st[i]; oc = ds_oc[i]; return; }
+        };
+        auto status_glyph = [](char st) -> const char * {
+          switch (st) {
+            case 'O': return "\U000F00D6";  // briefcase
+            case 'H': return "\U000F0322";  // laptop
+            case 'T': return "\U000F001D";  // airplane
+            case 'V': return "\U000F1055";  // palm-tree
+            case 'S': return "\U000F06EF";  // medical-bag
+            default: return nullptr;
+          }
+        };
+
+        // parse event rows
+        struct Ev { std::string date, label, who, title; };
+        std::vector<Ev> evs;
         text_sensor::TextSensor *slots[7] = {id(ev_1), id(ev_2), id(ev_3), id(ev_4), id(ev_5), id(ev_6), id(ev_7)};
-        int x0 = LEFT_W + 26, x1 = W - MARGIN, y = 16;
-        std::string cur_date = "";
-        int shown = 0;
         for (auto *slot : slots) {
           if (!slot->has_state()) continue;
           std::string row = slot->state;
@@ -391,50 +447,82 @@ display:
           size_t p2 = row.find('|', p1 + 1);
           size_t p3 = row.find('|', p2 + 1);
           if (p2 == std::string::npos || p3 == std::string::npos) continue;
-          std::string date = row.substr(0, p1);
-          std::string tstr = row.substr(p1 + 1, p2 - p1 - 1);
-          std::string who = row.substr(p2 + 1, p3 - p2 - 1);
-          std::string title = row.substr(p3 + 1);
-          if (date < today_s) date = today_s;  // ongoing multi-day events
-
-          if (date != cur_date) {
-            if (y > H - STATUS_H - 74) break;
-            if (cur_date != "") y += 10;
-            cur_date = date;
-            char hdr[20];
-            if (date == today_s) snprintf(hdr, sizeof(hdr), "TODAY");
-            else if (date == tomorrow_s) snprintf(hdr, sizeof(hdr), "TOMORROW");
-            else {
-              int yy = atoi(date.substr(0, 4).c_str());
-              int mm = atoi(date.substr(5, 2).c_str());
-              int dd = atoi(date.substr(8, 2).c_str());
-              int dow = (int)((days_from_civil(yy, mm, dd) + 4) % 7);  // 0 = Sunday
-              snprintf(hdr, sizeof(hdr), "%s %s %d", WDAY3[dow], MON3[mm - 1], dd);
-            }
-            it.print(x0, y, id(font_hdr), hdr);
-            int hw = text_w(hdr, id(font_hdr));
-            hline(x0 + hw + 12, y + 9, x1 - (x0 + hw + 12), 1);
-            y += 30;
-          }
-          if (y > H - STATUS_H - 44) break;
-
-          int cy = y + 15;
-          it.filled_circle(x0 + 13, cy, 13);
-          it.print(x0 + 13, cy, id(font_badge), COLOR_OFF, TextAlign::CENTER, who.c_str());
-          int tw2 = text_w(tstr.c_str(), id(font_evtime));
-          it.print(x1, cy - 9, id(font_evtime), TextAlign::TOP_RIGHT, tstr.c_str());
-          int max_w = (x1 - tw2 - 16) - (x0 + 26 + 12);
-          std::string t = title;
-          if (text_w(t.c_str(), id(font_title)) > max_w) {
-            while (t.size() > 1 && text_w((t + "…").c_str(), id(font_title)) > max_w) t.pop_back();
-            t += "…";
-          }
-          it.print(x0 + 26 + 12, cy - 12, id(font_title), t.c_str());
-          y += 42;
-          shown++;
+          Ev e;
+          e.date = row.substr(0, p1);
+          e.label = row.substr(p1 + 1, p2 - p1 - 1);
+          e.who = row.substr(p2 + 1, p3 - p2 - 1);
+          e.title = row.substr(p3 + 1);
+          if (e.date < today_s) e.date = today_s;
+          evs.push_back(e);
         }
-        if (shown == 0)
-          it.print(x0 + (x1 - x0) / 2, 120, id(font_small), TextAlign::TOP_CENTER, "No upcoming events");
+
+        // day headers: today..+2 always, later days only when they have events
+        std::vector<std::string> days = {today_s, day1_s, day2_s};
+        for (auto &e : evs) {
+          if (e.date > day2_s && std::find(days.begin(), days.end(), e.date) == days.end())
+            days.push_back(e.date);
+        }
+
+        int x0 = LEFT_W + 26, x1 = W - MARGIN, y = 16;
+        bool first = true;
+        for (auto &d : days) {
+          if (y > H - STATUS_H - 40) break;
+          if (!first) y += 10;
+          first = false;
+
+          char hdr[20];
+          if (d == today_s) snprintf(hdr, sizeof(hdr), "TODAY");
+          else if (d == day1_s) snprintf(hdr, sizeof(hdr), "TOMORROW");
+          else {
+            int yy = atoi(d.substr(0, 4).c_str());
+            int mm = atoi(d.substr(5, 2).c_str());
+            int dd = atoi(d.substr(8, 2).c_str());
+            int dow = (int)((days_from_civil(yy, mm, dd) + 4) % 7);  // 0 = Sunday
+            snprintf(hdr, sizeof(hdr), "%s %s %d", WDAY3[dow], MON3[mm - 1], dd);
+          }
+          it.print(x0, y, id(font_hdr), hdr);
+          int hw = text_w(hdr, id(font_hdr));
+
+          // right-aligned day icons: [on-call chip][status]
+          char st, oc;
+          day_flags(d, st, oc);
+          int icon_x = x1;
+          const char *stg = status_glyph(st);
+          if (stg != nullptr) {
+            icon_x -= 22;
+            it.print(icon_x, y - 2, id(mdi_sm), stg);
+          }
+          if (oc == 'P') {
+            icon_x -= 36;
+            pill(icon_x, y - 3, icon_x + 28, y + 19);
+            it.print(icon_x + 4, y - 2, id(mdi_sm), COLOR_OFF, "\U000F011E");
+          } else if (oc == 'S') {
+            icon_x -= 30;
+            it.print(icon_x + 4, y - 2, id(mdi_sm), "\U000F011E");
+          }
+          int rule_end = (icon_x < x1) ? icon_x - 10 : x1;
+          if (rule_end > x0 + hw + 12)
+            hline(x0 + hw + 12, y + 9, rule_end - (x0 + hw + 12), 1);
+          y += 30;
+
+          for (auto &e : evs) {
+            if (e.date != d) continue;
+            if (y > H - STATUS_H - 44) break;
+            int cy = y + 15;
+            it.filled_circle(x0 + 13, cy, 13);
+            it.print(x0 + 13, cy, id(font_badge), COLOR_OFF, TextAlign::CENTER, e.who.c_str());
+            int tw2 = text_w(e.label.c_str(), id(font_evtime));
+            it.print(x1, cy - 9, id(font_evtime), TextAlign::TOP_RIGHT, e.label.c_str());
+            int max_w = (x1 - tw2 - 16) - (x0 + 26 + 12);
+            std::string t = e.title;
+            if (text_w(t.c_str(), id(font_title)) > max_w) {
+              while (t.size() > 1 && text_w((t + "…").c_str(), id(font_title)) > max_w) t.pop_back();
+              t += "…";
+            }
+            it.print(x0 + 26 + 12, cy - 12, id(font_title), t.c_str());
+            y += 42;
+          }
+        }
       }
 
       // -------------------------------------------------------- status bar

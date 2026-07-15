@@ -14,7 +14,14 @@ from live HA state.)*
   high/low/rain/wind, and a trash/recycling badge (Mon noon → Tue noon;
   recycling parity anchored to 2026-07-14, computed on-device).
 - **Right column:** merged agenda for the Drew/Ashley/Family/Birthdays
-  calendars, grouped by day, with a D/A/F/B badge per event.
+  calendars, grouped by day, with a D/A/F/B badge per event. The same event
+  on two calendars collapses to one F row. Day headers for today +2 always
+  render (an empty day means a free day), with work-status icons on the right
+  end of the header rule: briefcase = office, laptop = WFH, airplane = work
+  travel, palm tree = vacation, medical bag = sick. On-call shows a pager
+  icon — inverted chip for primary, plain for secondary. Multi-day events
+  show once under TODAY as "thru THU"; an event ending at or before 9am
+  doesn't claim its final day.
 - **Status bar:** alarm, lock rollup, garage doors, EV battery, indoor temp,
   plus a low-battery alert pill (worst offender by name, `+N` for the rest).
   Alert states render as inverted pills and are never dropped; normal items
@@ -42,8 +49,12 @@ are staged into helpers by automations (all managed via the HA UI):
 - *update weather forecast* — hourly; `weather.get_forecasts` on
   `weather.openweathermap` → `input_number.eink_weather_{high,low,rain}`.
 - *update calendar events* — every 15 min; `calendar.get_events` across the
-  four calendars, merged/sorted → `input_text.eink_event_1..7` as
-  `YYYY-MM-DD|time|badge|title` rows.
+  four calendars, merged/sorted/deduped → `input_text.eink_event_1..7` as
+  `YYYY-MM-DD|label|badge|title` rows. Also reads `calendar.work_status`
+  (all-day events titled Office/WFH/Travel/Vacation/Sick; priority
+  Sick > Vacation > Travel > WFH > Office) and the PagerDuty-synced on-call
+  calendar (a day counts as on-call if the shift overlaps 9am–9pm; "Primary"
+  beats "Secondary") → `input_text.eink_day_status` as `YYYY-MM-DD|S|P` rows.
 - *update battery rollup* — hourly + on threshold change; computes
   `input_text.eink_battery_worst` ("Garage lock 2%") and
   `input_number.eink_battery_low_count`.
