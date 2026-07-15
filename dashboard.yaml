@@ -38,9 +38,17 @@ script:
   - id: full_refresh
     mode: single
     then:
-      - lambda: 'id(epaper).set_full_update_every(1);'
+      # reset the driver's update counter so the next render takes the
+      # normal full-refresh path. (Do NOT use set_full_update_every(1):
+      # that selects a legacy code path in the driver with opposite data
+      # polarity, which renders the whole frame inverted until the next
+      # partial update.)
+      - lambda: |-
+          struct ForceFull : public esphome::waveshare_epaper::WaveshareEPaper7P5InV2P {
+            void force() { this->at_update_ = 0; }
+          };
+          static_cast<ForceFull *>(id(epaper))->force();
       - component.update: epaper
-      - lambda: 'id(epaper).set_full_update_every(30);'
 
 ota:
   - platform: esphome
