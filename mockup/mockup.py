@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 # Values pulled from live HA state on 2026-07-13 where possible.
 
 DATA = {
-    "time": "9:41",
+    "time": "11:00",
     "ampm": "PM",
     "date": "Monday, July 13",
     "weather": {
@@ -259,14 +259,15 @@ def draw_left_column(c):
     w = DATA["weather"]
     colc = LEFT_W / 2
 
-    # clock
+    # clock (centered alone; AM/PM tucked under its right edge so the
+    # worst-case "11:00" still clears the column)
     f_clock = font(108, bold=True)
-    f_ampm = font(28, bold=True)
+    f_ampm = font(20, bold=True)
     tw = c.text_w(DATA["time"], f_clock)
-    aw = c.text_w(" " + DATA["ampm"], f_ampm)
-    x0 = colc - (tw + aw) / 2
+    x0 = colc - tw / 2
     c.text((x0, 18), DATA["time"], f_clock)
-    c.text((x0 + tw, 96), " " + DATA["ampm"], f_ampm)
+    aw = c.text_w(DATA["ampm"], f_ampm)
+    c.text((x0 + tw - aw, 112), DATA["ampm"], f_ampm)
 
     # date
     c.text((colc, 148), DATA["date"], font(24), anchor="ma")

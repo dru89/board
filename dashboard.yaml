@@ -180,7 +180,7 @@ font:
     glyphs: "0123456789: "
   - file: "gfonts://Roboto@700"
     id: font_ampm
-    size: 28
+    size: 20
     glyphs: "APM "
   - file: "gfonts://Roboto"
     id: font_date
@@ -327,15 +327,16 @@ display:
       it.filled_rectangle(0, H - STATUS_H, W, 2);              // status rule
 
       // ------------------------------------------------------------- clock
+      // clock centered alone (worst case "11:00" nearly fills the column);
+      // AM/PM tucked small under its right edge
       int hr = now.hour % 12; if (hr == 0) hr = 12;
       char clock_s[8], date_s[40];
       snprintf(clock_s, sizeof(clock_s), "%d:%02d", hr, now.minute);
       const char *ampm = now.hour < 12 ? "AM" : "PM";
       int tw = text_w(clock_s, id(font_clock));
-      int aw = text_w(ampm, id(font_ampm)) + 6;
-      int cx0 = COL_C - (tw + aw) / 2;
+      int cx0 = COL_C - tw / 2;
       it.print(cx0, 18, id(font_clock), clock_s);
-      it.print(cx0 + tw + 6, 96, id(font_ampm), ampm);
+      it.print(cx0 + tw, 112, id(font_ampm), TextAlign::TOP_RIGHT, ampm);
       snprintf(date_s, sizeof(date_s), "%s, %s %d",
                WDAY_FULL[(now.day_of_week - 1) % 7], MON_FULL[now.month - 1],
                now.day_of_month);
