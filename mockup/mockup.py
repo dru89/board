@@ -19,13 +19,14 @@ DATA = {
     "ampm": "PM",
     "date": "Monday, July 13",
     "weather": {
-        "condition": "Clear",          # clear-day | clear-night | cloudy | rain
-        "icon": "sun",                 # sun | moon | cloud | rain
+        "condition": "Rain",           # clear-day | clear-night | cloudy | rain
+        "icon": "rain",                # sun | moon | cloud | rain
         "temp": 61,
-        "feels": 60,
-        "high": 78,
+        "feels": 58,
+        "high": 66,
         "low": 49,
-        "rain_pct": 0,
+        "rain_pct": 60,
+        "rain_at": "3 PM",             # first hour rain becomes likely; None = omit
         "wind": 8,
     },
     # who: D=Drew, A=Ashley, F=Family, B=Birthday
@@ -244,8 +245,16 @@ def icon_battlow(c, x, y, s, fill=BLACK):
             fill=fill)
 
 
+def icon_rain(c, x, y, s, fill=BLACK):
+    icon_cloud(c, x, y - s * 0.12, s, fill)
+    for fx in (0.30, 0.50, 0.70):
+        c.line(x + s * fx, y + s * 0.74, x + s * fx - s * 0.08,
+               y + s * 0.92, w=3, fill=fill)
+
+
 ICONS = {
     "sun": icon_sun, "moon": icon_moon, "cloud": icon_cloud,
+    "rain": icon_rain,
     "battlow": icon_battlow,
     "trash": icon_trash, "recycle": icon_recycle, "shield": icon_shield,
     "lock": icon_lock, "garage": icon_garage, "car": icon_car,
@@ -278,9 +287,11 @@ def draw_left_column(c):
     # forecast lines
     c.text((colc, 304), f"H {w['high']}°    L {w['low']}°",
            font(24, bold=True), anchor="ma")
-    c.text((colc, 336),
-           f"Rain {w['rain_pct']}%  ·  Wind {w['wind']} mph",
-           font(19), anchor="ma")
+    if w.get("rain_at") and w["rain_pct"] > 0:
+        line2 = f"Rain {w['rain_pct']}% ~{w['rain_at']}  ·  Wind {w['wind']}"
+    else:
+        line2 = f"Rain {w['rain_pct']}%  ·  Wind {w['wind']} mph"
+    c.text((colc, 336), line2, font(19), anchor="ma")
 
     # trash / recycling badge
     t = DATA["trash"]

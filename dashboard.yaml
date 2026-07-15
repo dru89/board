@@ -171,6 +171,9 @@ text_sensor:
   - platform: homeassistant
     id: day_status
     entity_id: input_text.eink_day_status
+  - platform: homeassistant
+    id: rain_at
+    entity_id: input_text.eink_rain_at
 
 # ------------------------------------------------------------------- fonts
 font:
@@ -367,11 +370,22 @@ display:
         it.printf(COL_C, 304, id(font_hl), TextAlign::TOP_CENTER, "H %.0f°   L %.0f°",
                   id(wx_high).state, id(wx_low).state);
       {
-        char line2[48] = "";
-        if (id(wx_rain).has_state() && id(wx_wind).has_state())
-          snprintf(line2, sizeof(line2), "Rain %.0f%%  ·  Wind %.0f mph", id(wx_rain).state, id(wx_wind).state);
-        else if (id(wx_wind).has_state())
+        // rain % is the max over next-12h buckets passing both the
+        // probability and amount thresholds; rain_at is the first such
+        // hour. When timing is shown, drop "mph" to keep the line inside
+        // the column.
+        char line2[64] = "";
+        std::string rat = id(rain_at).has_state() ? id(rain_at).state : "";
+        if (id(wx_rain).has_state() && id(wx_wind).has_state()) {
+          if (id(wx_rain).state > 0 && !rat.empty())
+            snprintf(line2, sizeof(line2), "Rain %.0f%% ~%s  ·  Wind %.0f",
+                     id(wx_rain).state, rat.c_str(), id(wx_wind).state);
+          else
+            snprintf(line2, sizeof(line2), "Rain %.0f%%  ·  Wind %.0f mph",
+                     id(wx_rain).state, id(wx_wind).state);
+        } else if (id(wx_wind).has_state()) {
           snprintf(line2, sizeof(line2), "Wind %.0f mph", id(wx_wind).state);
+        }
         if (line2[0]) it.print(COL_C, 336, id(font_small), TextAlign::TOP_CENTER, line2);
       }
 
