@@ -48,6 +48,8 @@ are staged into helpers by automations (all managed via the HA UI):
 **Automations** (Settings → Automations, `eInk:` prefix):
 - *update weather forecast* — hourly; `weather.get_forecasts` on
   `weather.openweathermap` → `input_number.eink_weather_{high,low,rain}`.
+  Rain is the max precipitation probability over the next 12 hours (the
+  "will I get rained on" number), not the whole-day aggregate.
 - *update calendar events* — every 15 min; `calendar.get_events` across the
   four calendars, merged/sorted/deduped → `input_text.eink_event_1..7` as
   `YYYY-MM-DD|label|badge|title` rows. Also reads `calendar.work_status`
