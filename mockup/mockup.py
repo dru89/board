@@ -259,15 +259,10 @@ def draw_left_column(c):
     w = DATA["weather"]
     colc = LEFT_W / 2
 
-    # clock (centered alone; AM/PM tucked under its right edge so the
-    # worst-case "11:00" still clears the column)
+    # clock centered, no AM/PM (worst case "11:00" nearly fills the column)
     f_clock = font(108, bold=True)
-    f_ampm = font(20, bold=True)
     tw = c.text_w(DATA["time"], f_clock)
-    x0 = colc - tw / 2
-    c.text((x0, 18), DATA["time"], f_clock)
-    aw = c.text_w(DATA["ampm"], f_ampm)
-    c.text((x0 + tw - aw, 112), DATA["ampm"], f_ampm)
+    c.text((colc - tw / 2, 18), DATA["time"], f_clock)
 
     # date
     c.text((colc, 148), DATA["date"], font(24), anchor="ma")
