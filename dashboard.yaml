@@ -362,12 +362,15 @@ display:
       if (wx_icon != nullptr) it.print(24, 204, id(mdi_lg), wx_icon);
       if (id(wx_temp).has_state())
         it.printf(124, 200, id(font_temp), "%.0f°", id(wx_temp).state);
+      // condition line spans the full column below the icon/temp row — the
+      // space right of the icon can't fit "Partly cloudy · feels 100°"
       if (id(wx_feels).has_state())
-        it.printf(126, 264, id(font_small), "%s · feels %.0f°", wx_label, id(wx_feels).state);
+        it.printf(COL_C, 284, id(font_small), TextAlign::TOP_CENTER,
+                  "%s · feels %.0f°", wx_label, id(wx_feels).state);
       else
-        it.print(126, 264, id(font_small), wx_label);
+        it.print(COL_C, 284, id(font_small), TextAlign::TOP_CENTER, wx_label);
       if (id(wx_high).has_state() && id(wx_low).has_state())
-        it.printf(COL_C, 304, id(font_hl), TextAlign::TOP_CENTER, "H %.0f°   L %.0f°",
+        it.printf(COL_C, 312, id(font_hl), TextAlign::TOP_CENTER, "H %.0f°   L %.0f°",
                   id(wx_high).state, id(wx_low).state);
       {
         // rain % is the max over next-12h buckets passing both the
@@ -386,7 +389,7 @@ display:
         } else if (id(wx_wind).has_state()) {
           snprintf(line2, sizeof(line2), "Wind %.0f mph", id(wx_wind).state);
         }
-        if (line2[0]) it.print(COL_C, 336, id(font_small), TextAlign::TOP_CENTER, line2);
+        if (line2[0]) it.print(COL_C, 344, id(font_small), TextAlign::TOP_CENTER, line2);
       }
 
       // --------------------------------------------------- trash/recycling

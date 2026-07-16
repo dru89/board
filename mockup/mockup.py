@@ -18,8 +18,10 @@ DATA = {
     "time": "11:00",
     "ampm": "PM",
     "date": "Monday, July 13",
+    # layout stress data: "Partly cloudy" is the widest condition label and
+    # the rain timing line is the widest rain line — keep both as samples
     "weather": {
-        "condition": "Rain",           # clear-day | clear-night | cloudy | rain
+        "condition": "Partly cloudy",  # clear-day | clear-night | cloudy | rain
         "icon": "rain",                # sun | moon | cloud | rain
         "temp": 61,
         "feels": 58,
@@ -278,20 +280,21 @@ def draw_left_column(c):
 
     c.line(MARGIN, 192, LEFT_W - MARGIN, 192, w=2)
 
-    # weather: icon + big temp
+    # weather: icon + big temp; condition line full-width below (the
+    # 170px right of the icon can't fit "Partly cloudy · feels 100°")
     ICONS[w["icon"]](c, 28, 210, 78)
     c.text((124, 200), f"{w['temp']}°", font(58, bold=True))
-    c.text((126, 264), f"{w['condition']} · feels {w['feels']}°",
-           font(19))
+    c.text((colc, 284), f"{w['condition']} · feels {w['feels']}°",
+           font(19), anchor="ma")
 
     # forecast lines
-    c.text((colc, 304), f"H {w['high']}°    L {w['low']}°",
+    c.text((colc, 312), f"H {w['high']}°    L {w['low']}°",
            font(24, bold=True), anchor="ma")
     if w.get("rain_at") and w["rain_pct"] > 0:
         line2 = f"Rain {w['rain_pct']}% ~{w['rain_at']}  ·  Wind {w['wind']}"
     else:
         line2 = f"Rain {w['rain_pct']}%  ·  Wind {w['wind']} mph"
-    c.text((colc, 336), line2, font(19), anchor="ma")
+    c.text((colc, 344), line2, font(19), anchor="ma")
 
     # trash / recycling badge
     t = DATA["trash"]
