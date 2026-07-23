@@ -39,9 +39,27 @@ Data contracts between HA and device:
   fully inverted frame until the next partial. Found the hard way.
 - Boot splash renders via full refresh: after any reboot the panel's own RAM
   may hold a stale frame, and partials diff against panel RAM.
-- On HA reconnect: quick partial (fast feedback), then a full refresh 20s
-  later once sensor states have settled. Never full-refresh a half-populated
-  frame — early sparse renders are what ghost.
+- On HA reconnect: ONE full refresh at +90s, nothing earlier. **Do not add
+  renders in the first ~40s after boot/connect.** 2026-07-23 post-mortem:
+  nine crashes across two days, all with garbage backtraces in SPI-DMA /
+  FreeRTOS / flash-cache internals, all within ~40s of an API client
+  connect after boot, zero in thousands of steady-state minute ticks.
+  Exhaustive bisection (glyph, pill logic, two-pill layout, entity reads,
+  clean rebuilds, 16KB loop stack) cleared every code suspect; the failure
+  needs [early-boot window] × [display render] — some boot-time flash
+  write/cache disturbance colliding with the render's flash-heavy SPI
+  transfer (exact writer unidentified). Deferring the reconnect render past
+  the window fixed it: 3/3 clean boot cycles with pill state live vs ~5/5
+  crashes before.
+- OTA rollback is disabled (`enable_ota_rollback: false`): its valid-marking
+  flash write was a crash-collision suspect, and its silent revert-to-old-
+  image behavior repeatedly sabotaged debugging ("OTA successful" while the
+  old code runs). Flashed = running, always. USB rescue is the fallback for
+  a genuinely bad image.
+- Build hygiene: esphome's validated-config cache once served a stale
+  config into a "successful" OTA. If a build says "skipping validation"
+  after config edits, verify the change is in the artifact (grep
+  `src/main.cpp`) before trusting the flash.
 - Never draw a fallback icon for data that simply hasn't arrived yet — blank
   ghosts invisibly, icons don't.
 

@@ -17,6 +17,14 @@ esp32:
     type: esp-idf
     sdkconfig_options:
       CONFIG_XTAL_FREQ_40: 'y'
+    advanced:
+      # rollback's valid-marking flash write on first boot suspends the
+      # flash cache and races the first display render (SPI driver code
+      # faults on instruction fetch mid-transfer). Attended OTAs + USB
+      # rescue make rollback protection dispensable.
+      enable_ota_rollback: false
+      # headroom for the deep display lambda + font + SPI call stack
+      loop_task_stack_size: 16384
 
 wifi:
   ssid: !secret wifi_ssid
@@ -26,12 +34,12 @@ api:
   encryption:
     key: !secret api_key
   on_client_connected:
-    # quick partial render for fast feedback, then a full clean-up refresh
-    # once sensor states have settled — clears splash/stale ghosting without
-    # ever full-refreshing a half-populated frame
-    - delay: 2s
-    - component.update: epaper
-    - delay: 20s
+    # ONE deferred clean-up refresh, well past the early-boot window.
+    # Every crash ever observed on this device happened during renders in
+    # the first ~40s after an API client connect (boot-time flash-cache /
+    # SPI-DMA disturbance, exact writer unidentified); steady-state minute
+    # ticks have never crashed. Do not add early renders back.
+    - delay: 90s
     - script.execute: full_refresh
 
 script:
