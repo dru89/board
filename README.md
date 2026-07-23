@@ -66,6 +66,10 @@ are staged into helpers by automations (all managed via the HA UI):
 - *update battery rollup* — hourly + on threshold change; computes
   `input_text.eink_battery_worst` ("Garage lock 2%") and
   `input_number.eink_battery_low_count`.
+- *update pet rollup* — every 30 min + on any pet problem sensor; worst
+  pet-care issue (Petlibro feeders/fountains/litter boxes, welfare-first
+  priority) into `input_text.eink_pet_worst` / `input_number.eink_pet_count`,
+  rendered as a paw pill ahead of the battery pill.
 
 **Tuning helpers** (adjustable live, no reflash; also on the eInk Board
 dashboard):

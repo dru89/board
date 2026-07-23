@@ -119,6 +119,9 @@ sensor:
     id: batt_low_count
     entity_id: input_number.eink_battery_low_count
   - platform: homeassistant
+    id: pet_count
+    entity_id: input_number.eink_pet_count
+  - platform: homeassistant
     id: ev_batt_thresh
     entity_id: input_number.eink_thresh_ev_batt
 
@@ -180,6 +183,9 @@ text_sensor:
   - platform: homeassistant
     id: rain_at
     entity_id: input_text.eink_rain_at
+  - platform: homeassistant
+    id: pet_worst
+    entity_id: input_text.eink_pet_worst
 
 # ------------------------------------------------------------------- fonts
 font:
@@ -275,6 +281,7 @@ font:
       "\U000F0B6C", # car-electric
       "\U000F050F", # thermometer
       "\U000F0083", # battery-alert
+      "\U000F03E9", # paw
       ]
 
 # ----------------------------------------------------------------- display
@@ -615,6 +622,13 @@ display:
             snprintf(b, sizeof(b), "%.0f° in", id(indoor_temp).state);
             items.push_back({"\U000F050F", b, false, true});
           }
+        }
+        // pet-care pill (welfare beats hardware: renders before batteries)
+        if (id(pet_worst).has_state() && !id(pet_worst).state.empty()) {
+          std::string txt = id(pet_worst).state;
+          int cnt = id(pet_count).has_state() ? (int)id(pet_count).state : 1;
+          if (cnt > 1) txt += "  +" + std::to_string(cnt - 1);
+          items.push_back({"\U000F03E9", txt, true, false});
         }
         // battery alert pill (always shown when present)
         if (id(batt_worst).has_state() && !id(batt_worst).state.empty()) {

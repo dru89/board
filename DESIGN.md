@@ -81,6 +81,16 @@ Data contracts between HA and device:
   by name + `+N` (a named battery gets acted on; "check HA" gets ignored).
 - **Dedupe**: same normalized title + same start on 2+ calendars → one row,
   F badge.
+- **Pet rollup**: same worst-offender+count pattern as batteries, own paw
+  pill rendered BEFORE the battery pill (animal welfare beats hardware).
+  Priority within: food empty > dispenser jam > fountain water below
+  `eink_thresh_fountain_pct` > device batteries > litter device/door error >
+  waste bin full. Deliberately excluded from the panel: consumable cadence
+  (filter/cleaning/desiccant/mat days — chore scheduling, and the counters
+  were never reset so they'd light the pill permanently), litter box
+  "battery 0%" (no backup battery installed = permanent false alarm), and
+  litter "remaining water" (meaning unclear, both read 0). Those live on
+  the HA dashboard's Pets section instead.
 - **Trash/recycling**: pure on-device date math (no HA entity): badge Mon
   noon → Tue noon; recycling parity anchored to 2026-07-14 (a recycling
   pickup) via days-from-civil / 7 / mod 2.
