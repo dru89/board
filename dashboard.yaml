@@ -56,6 +56,12 @@ ota:
 
 logger:
 
+button:
+  # remote reboot from HA — recovery for a wedged panel controller
+  # starving the main loop in busy-wait timeouts
+  - platform: restart
+    name: "eInk Dashboard Restart"
+
 time:
   - platform: homeassistant
     id: ha_time
