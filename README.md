@@ -94,5 +94,8 @@ esphome run dashboard.yaml --device /dev/ttyUSB0    # first flash / rescue
 ```
 
 USB flashing needs serial access (`uucp` group or `chmod a+rw /dev/ttyUSB0`).
-The device is `eink-dashboard` on the LAN; mDNS may not resolve from the
-desktop, so use the IP from the HA ESPHome integration if OTA can't find it.
+The device is `eink-dashboard` on the IoT network; mDNS doesn't resolve
+across subnets, so get its current IP from the HA ESPHome integration
+(`esphome run dashboard.yaml --device <ip>`). OTA requires a route from
+your machine to the IoT subnet (TCP 6053/3232) — after network changes,
+check both the IP and the route.
