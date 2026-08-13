@@ -55,7 +55,8 @@ DATA = {
             ],
         },
     ],
-    "trash": {"show": True, "recycling": True},
+    "trash": {"show": False, "recycling": True},
+    "tomorrow": {"high": 82, "low": 58, "rain": 42, "icon": "rain"},
     # droppable: removed (in list order) when alert pills need room
     "status": [
         {"icon": "shield", "text": "Disarmed", "alert": False},
@@ -311,6 +312,16 @@ def draw_left_column(c):
             ICONS[name](c, x, by0 + 8, iw, fill=WHITE)
             x += iw + 8
         c.text((x, (by0 + by1) / 2), label, f_badge, fill=WHITE, anchor="lm")
+    elif "tomorrow" in DATA:
+        tm = DATA["tomorrow"]
+        line = f"Tomorrow  {tm['high']}° / {tm['low']}°"
+        if tm.get("rain"):
+            line += f"  ·  {tm['rain']}%"
+        f_tm = font(18)
+        total = 34 + c.text_w(line, f_tm)
+        x = colc - total / 2
+        ICONS[tm["icon"]](c, x, 378, 26)
+        c.text((x + 34, 391), line, f_tm, anchor="lm")
 
 
 def draw_events(c):
