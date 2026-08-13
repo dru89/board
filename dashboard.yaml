@@ -10,6 +10,7 @@ esphome:
     then:
       - output.turn_on: display_pwr
       - delay: 500ms
+      - lambda: 'id(panel_recoveries).publish_state(id(recovery_count));'
 
 esp32:
   board: esp32dev
