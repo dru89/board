@@ -43,6 +43,17 @@ api:
     - script.execute: full_refresh
 
 script:
+  # recover a wedged panel controller: hard power-cycle the HAT via the
+  # PWR gate on GPIO21, re-run the driver init, repaint from scratch
+  - id: panel_recover
+    mode: single
+    then:
+      - output.turn_off: display_pwr
+      - delay: 3s
+      - output.turn_on: display_pwr
+      - delay: 1s
+      - lambda: 'id(epaper).initialize();'
+      - script.execute: full_refresh
   - id: full_refresh
     mode: single
     then:
@@ -69,6 +80,32 @@ button:
   # starving the main loop in busy-wait timeouts
   - platform: restart
     name: "eInk Dashboard Restart"
+  # manual panel recovery (HAT power-cycle + re-init) without a reboot
+  - platform: template
+    name: "eInk Panel Reset"
+    on_press:
+      - script.execute: panel_recover
+
+binary_sensor:
+  # watchdog on the panel's busy line (shared with the display driver).
+  # Normal refreshes hold busy for seconds; a wedged controller holds it
+  # forever and starves the loop in driver timeouts (see DESIGN.md).
+  # 3 minutes of continuous busy = wedged -> power-cycle the HAT.
+  - platform: gpio
+    id: panel_busy_watchdog
+    internal: true
+    pin:
+      number: GPIO4
+      inverted: true
+      allow_other_uses: true
+      mode: INPUT
+    filters:
+      - delayed_on: 3min
+    on_press:
+      - logger.log:
+          level: ERROR
+          format: "Panel busy-wedged for 3min - running recovery"
+      - script.execute: panel_recover
 
 time:
   - platform: homeassistant
@@ -301,6 +338,7 @@ display:
     busy_pin:
       number: GPIO4
       inverted: true
+      allow_other_uses: true
     reset_pin: GPIO16
     model: 7.50inv2p
     update_interval: never
