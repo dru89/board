@@ -10,7 +10,6 @@ esphome:
     then:
       - output.turn_on: display_pwr
       - delay: 500ms
-      - lambda: 'id(panel_recoveries).publish_state(id(recovery_count));'
 
 esp32:
   board: esp32dev
@@ -33,7 +32,6 @@ wifi:
   networks:
     - ssid: !secret wifi_ssid
       password: !secret wifi_password
-      priority: 10   # prefer the IoT network whenever it's visible
     - ssid: !secret wifi_ssid_legacy
       password: !secret wifi_password_legacy
 
@@ -49,14 +47,6 @@ api:
     - delay: 90s
     - script.execute: full_refresh
 
-globals:
-  # survives reboots so wedge frequency is visible in HA history even
-  # when nobody catches the panel mid-recovery
-  - id: recovery_count
-    type: int
-    restore_value: yes
-    initial_value: '0'
-
 script:
   # recover a wedged panel controller: hard power-cycle the HAT via the
   # PWR gate on GPIO21, re-run the driver init, repaint from scratch
@@ -68,9 +58,6 @@ script:
       - output.turn_on: display_pwr
       - delay: 1s
       - lambda: 'id(epaper).initialize();'
-      - lambda: |-
-          id(recovery_count) += 1;
-          id(panel_recoveries).publish_state(id(recovery_count));
       - script.execute: full_refresh
   - id: full_refresh
     mode: single
@@ -154,14 +141,6 @@ spi:
 
 # ------------------------------------------------------------- HA entities
 sensor:
-  # wedge observability: count of automatic panel recoveries, kept in HA
-  # history so the fix is verifiable without catching a wedge live
-  - platform: template
-    id: panel_recoveries
-    name: "eInk Panel Recoveries"
-    accuracy_decimals: 0
-    update_interval: never
-    lambda: 'return id(recovery_count);'
   - platform: homeassistant
     id: wx_temp
     entity_id: sensor.openweathermap_temperature

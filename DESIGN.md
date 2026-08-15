@@ -59,7 +59,28 @@ Data contracts between HA and device:
 - Build hygiene: esphome's validated-config cache once served a stale
   config into a "successful" OTA. If a build says "skipping validation"
   after config edits, verify the change is in the artifact (grep
-  `src/main.cpp`) before trusting the flash.
+  `src/main.cpp`) before trusting the flash. Also: never build two yaml
+  files sharing one node name without wiping `.esphome/build` between
+  them — the cached component list goes stale (linker errors at best,
+  silent wrong-component builds at worst).
+- **2026-08-14 crash-loop post-mortem (OPEN INVESTIGATION):** the panel
+  crash-looped (IllegalInstruction in SPI DMA, ~1 reboot/min) for 29 hours.
+  Bisection eliminated, in order: OTA slot (identical binary crashed in
+  both), boot-time `publish_state` (removed, still crashed), `restore_value`
+  NVS prefs (removed, still crashed). The surviving correlation across every
+  session over two days: **crash-looping only while associated to the
+  Tribbles-IoT SSID; stable only on HAL9000** — same AP, different
+  SSID/VLAN. Working theory: IoT-SSID radio behavior (power-save/DTIM/
+  multicast wake bursts) drives wifi DMA+interrupt activity that collides
+  with display SPI DMA under flash-cache pressure. The recovery-counter
+  feature was reverted along the way but is NOT believed guilty — it always
+  shipped together with the wifi `priority` flag that moved the device to
+  Tribbles. Next experiments, in order, each with a 10-minute soak ON
+  Tribbles: (1) stable config + `priority` + `power_save_mode: none`;
+  (2) UniFi side: DTIM=1, disable multicast enhancement for the IoT SSID;
+  (3) re-add the recovery counter only after the network variable is
+  resolved. Until then the panel stays on HAL9000 and the VLAN migration
+  is parked.
 - Never draw a fallback icon for data that simply hasn't arrived yet — blank
   ghosts invisibly, icons don't.
 
