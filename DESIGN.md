@@ -56,6 +56,16 @@ Data contracts between HA and device:
   image behavior repeatedly sabotaged debugging ("OTA successful" while the
   old code runs). Flashed = running, always. USB rescue is the fallback for
   a genuinely bad image.
+- **Device-specific landmine: `sensor: platform: template` crash-loops this
+  device.** Five builds (2026-08-13..15) containing a trivial template
+  sensor all crash-looped in the display SPI path; removing only the
+  template sensor stabilized each time (B1 bisection, 2026-08-15).
+  Mechanism unexplained — treat as empirical. Consequence: the panel
+  recovery counter lives in HA as `input_number.eink_panel_recoveries`,
+  incremented by the device via `homeassistant.service` from
+  `panel_recover` (the device's "allow service calls" permission is
+  enabled on its HA config entry). Do not add local template sensors to
+  this config.
 - Build hygiene: esphome's validated-config cache once served a stale
   config into a "successful" OTA. If a build says "skipping validation"
   after config edits, verify the change is in the artifact (grep

@@ -51,6 +51,19 @@ api:
     - delay: 90s
     - script.execute: full_refresh
 
+globals:
+  # recovery counter — restore_value stays OFF (NVS prefs are radioactive
+  # on this device, see DESIGN.md); HA history preserves increments
+  - id: recovery_count
+    type: int
+    restore_value: no
+    initial_value: '0'
+  # last timestamp a render saw a live HA API connection (staleness tell)
+  - id: last_api_ok
+    type: time_t
+    restore_value: no
+    initial_value: '0'
+
 script:
   # recover a wedged panel controller: hard power-cycle the HAT via the
   # PWR gate on GPIO21, re-run the driver init, repaint from scratch
@@ -62,6 +75,14 @@ script:
       - output.turn_on: display_pwr
       - delay: 1s
       - lambda: 'id(epaper).initialize();'
+      - lambda: 'id(recovery_count) += 1;'
+      # counter lives HA-side (input_number survives device reboots; the
+      # device hosts NO local sensor entity for it — a template sensor
+      # here crash-looped the display five builds running, see DESIGN.md)
+      - homeassistant.service:
+          service: input_number.increment
+          data:
+            entity_id: input_number.eink_panel_recoveries
       - script.execute: full_refresh
   - id: full_refresh
     mode: single
@@ -328,6 +349,7 @@ font:
       "\U000F1055", # palm-tree (vacation)
       "\U000F06EF", # medical-bag (sick)
       "\U000F011E", # cellphone-basic (on call)
+      "\U000F0164", # cloud-off-outline (HA link stale)
       ]
   - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
     id: mdi_md
@@ -419,6 +441,17 @@ display:
       // --------------------------------------------------------- structure
       it.filled_rectangle(LEFT_W, 16, 2, H - STATUS_H - 28);   // vertical rule
       it.filled_rectangle(0, H - STATUS_H, W, 2);              // status rule
+
+      // staleness tell: data stays rendered from RAM cache during HA
+      // outages, but after 10 minutes without the API, stop pretending
+      // it's current (small cloud-off glyph, top-left corner)
+      {
+        bool api_ok = esphome::api::global_api_server != nullptr &&
+                      esphome::api::global_api_server->is_connected();
+        if (api_ok || id(last_api_ok) == 0) id(last_api_ok) = now.timestamp;
+        if (!api_ok && now.timestamp - id(last_api_ok) > 600)
+          it.print(10, 10, id(mdi_sm), "\U000F0164");
+      }
 
       // ------------------------------------------------------------- clock
       // clock centered, no AM/PM (worst case "11:00" is 278px in the
