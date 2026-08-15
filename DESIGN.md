@@ -63,7 +63,20 @@ Data contracts between HA and device:
   files sharing one node name without wiping `.esphome/build` between
   them — the cached component list goes stale (linker errors at best,
   silent wrong-component builds at worst).
-- **2026-08-14 crash-loop post-mortem (OPEN INVESTIGATION):** the panel
+- **RESOLVED 2026-08-15: `wifi: power_save_mode: none` is load-bearing.**
+  The ESP32's default modem power-save wakes the radio in bursts (heaviest
+  right after association — hence the "boot window" pattern), and those
+  wifi RX/DMA bursts colliding with display SPI DMA under flash-cache
+  pressure caused every crash in this document: July's rare boot-window
+  faults on HAL9000 AND August's deterministic crash-loops on Tribbles-IoT
+  (whose beacon/multicast timing made the collision constant). With power
+  save disabled the device is stable on Tribbles-IoT. A wall-powered
+  display has no reason to power-save its radio; never remove this
+  setting. The UniFi configs of both SSIDs are near-identical and were
+  not the root cause. The recovery counter (reverted during bisection)
+  was innocent and can be re-added — WITHOUT `restore_value`, which was
+  never separately cleared of suspicion.
+- **2026-08-14 crash-loop post-mortem (investigation log):** the panel
   crash-looped (IllegalInstruction in SPI DMA, ~1 reboot/min) for 29 hours.
   Bisection eliminated, in order: OTA slot (identical binary crashed in
   both), boot-time `publish_state` (removed, still crashed), `restore_value`

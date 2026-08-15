@@ -27,11 +27,15 @@ esp32:
       loop_task_stack_size: 16384
 
 wifi:
-  # knows both networks so the IoT migration is a router-side change only;
-  # drop the legacy entry once the panel lives on the IoT VLAN
+  # power save OFF: the IoT VLAN floods multicast (mDNS reflection on,
+  # IGMP snooping off) and DTIM-1 wake bursts under modem power-save
+  # correlate with the SPI-DMA crashes documented in DESIGN.md. A wall-
+  # powered device has no reason to power-save the radio.
+  power_save_mode: none
   networks:
     - ssid: !secret wifi_ssid
       password: !secret wifi_password
+      priority: 10   # prefer the IoT network whenever it's visible
     - ssid: !secret wifi_ssid_legacy
       password: !secret wifi_password_legacy
 
