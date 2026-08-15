@@ -195,15 +195,14 @@ text_sensor:
   - platform: homeassistant
     id: alarm_state
     entity_id: alarm_control_panel.alarm_control_panel
+  # post-remodel locks (2026-08): new z-wave kitchen/front locks; the
+  # dining room is now a sliding door with no lock
   - platform: homeassistant
     id: lock_front
-    entity_id: lock.entryway_door
+    entity_id: lock.entrance_front_door
   - platform: homeassistant
     id: lock_kitchen
-    entity_id: lock.kitchen
-  - platform: homeassistant
-    id: lock_dining
-    entity_id: lock.dining_room
+    entity_id: lock.kitchen_kitchen_door
   - platform: homeassistant
     id: lock_garage
     entity_id: lock.garage
@@ -702,7 +701,7 @@ display:
             }
           } else if (tok == "locks") {
             int unlocked = 0, known = 0;
-            text_sensor::TextSensor *locks[4] = {id(lock_front), id(lock_kitchen), id(lock_dining), id(lock_garage)};
+            text_sensor::TextSensor *locks[3] = {id(lock_front), id(lock_kitchen), id(lock_garage)};
             for (auto *l : locks) {
               if (!l->has_state()) continue;
               std::string st = l->state;
